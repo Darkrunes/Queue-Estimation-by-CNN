@@ -129,7 +129,7 @@ class YOLO:
         x = LeakyReLU()(x)
 
         x = keras.layers.AveragePooling2D()(x)
-        x = keras.layers.Softmax()
+        x = keras.layers.Softmax()(x)
 
         self.model = keras.Model(self.inputLayer, x)
         self.model.compile(optimizer="adam", loss=self.customYOLOLoss(), metrics=["accuracy"])
