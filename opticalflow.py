@@ -1,43 +1,71 @@
 #!/usr/bin/env python3
 import numpy as np
 import cv2
+import sys
 
-# Draws optic flow visualisation on image using a given step size for the line glyphs that show the flow vectors on the image
-def draw_flow(img, flow, step=16):
-    h, w = img.shape[:2]
-    y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1)
-    fx, fy = flow[y,x].T
-    lines = np.vstack([x, y, x+fx, y+fy]).T.reshape(-1, 2, 2)
-    lines = np.int32(lines + 0.5)
-    vis = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    
-    cv2.polylines(vis, lines, 0, (0, 255, 0))
-    for (x1, y1), (x2, y2) in lines:      
-	    cv2.circle(vis, (x1, y1), 1, (0, 255, 0), -1)
-    return vis
+farneback_params = {
+    'pyr_scale':0.5,
+    'levels':3,
+    'winsize':15,
+    'iterations': 3,
+    'poly_n': 5,
+    'poly_sigma':1.2,
+    'flags':cv2.OPTFLOW_FARNEBACK_GAUSSIAN
+    }
+
+def draw_hsv(flow):
+    h, w = flow.shape[:2]
+    # Compute the magnitude and angle of 2D vectors
+    mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
+    hsv = np.zeros((h, w, 3), np.uint8)
+    # Corresponds to hue
+    hsv[...,0] = ang*(180/np.pi/2)
+    # Corresponds to saturation
+    hsv[...,1] = 255
+    # Corresponds to value
+    hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    return bgr
 
 # Define video capture object
 cap = cv2.VideoCapture('video.avi')
 
 # Take first frame and convert to gray scale image
-ret, frame = cap.read()
-prev = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+ret, first_frame = cap.read()
+prev = cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
 
 # Play until the user decides to stop
 while True:
-    # Get next frame
-    ret, frame1 = cap.read()
-    next = cv2.cvtColor(frame1,cv2.COLOR_BGR2GRAY)
+    # Get next frame and convert to gray scale
+    ret, next_frame = cap.read()
+    curr_frame = next_frame.copy()
+    next = cv2.cvtColor(next_frame,cv2.COLOR_BGR2GRAY)
+    # Calculate the dense optical flow between two frames
+    flow = cv2.calcOpticalFlowFarneback(prev,next,None,**farneback_params)
+    prev = next
+    #cv2.imshow('Hi', draw_hsv(flow))
+    hsv = cv2.cvtColor(draw_hsv(flow), cv2.COLOR_BGR2GRAY)
     
-    # Calculate the dense optical flow
-    flow = cv2.calcOpticalFlowFarneback(prev,next, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    #kernel = np.ones((5,5), np.uint8)
+    #dilation = cv2.dilate(hsv, kernel, iterations=2)
+    #blurred_frame = cv2.GaussianBlur(hsv, (5, 5), 0)
+    #(contours,_) = cv2.findContours(blurred_frame.copy(),cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
 
-    # Display final frame
-    cv2.imshow('hi', draw_flow(next, flow))
+    # Computes the bounding box for the contour, and draws it on the frame
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        # Removes small contours
+        if(area>300):
+            x,y,w,h = cv2.boundingRect(contour)
+            cv2.rectangle(curr_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+			#cv2.putText(curr_frame,str(time.time()), (x,y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255),1)
+    # Displays current frame
+    cv2.imshow('hello', curr_frame)
+
     k = cv2.waitKey(30) & 0xff
-
     # Exit if the user presses ESC
     if k == 27:
         break
 
+cap.release()
 cv2.destroyAllWindows()
