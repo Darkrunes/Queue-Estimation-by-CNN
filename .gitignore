@@ -100,3 +100,12 @@ ENV/
 # mypy
 .mypy_cache/
 .idea/
+.coveragerc
+.travis.yml
+*.gif
+*.weights
+cfg/
+ckpt/
+test.avi
+pedtest.avi
+test/
