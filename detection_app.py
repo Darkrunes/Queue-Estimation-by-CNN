@@ -59,15 +59,24 @@ def main():
     elif sys.argv[1] == "-v":
         # video file
         print("Video File")
+        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+
         cap = cv2.VideoCapture(sys.argv[2])
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        out = cv2.VideoWriter('output.avi', fourcc, 20.0, (frame_height, frame_width))
         while cap.isOpened():
             ret, frame = cap.read()
             if ret:
                 results = tfnet.return_predict(frame)
-                cv2.imshow("results frame", draw_boxes(frame, results))
+                boxed_image = draw_boxes(frame, results)
+                out.write(boxed_image)
+                cv2.imshow("results frame", boxed_image)
+
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         cap.release()
+        out.release()
         cv2.destroyAllWindows()
     else:
         #webcam
