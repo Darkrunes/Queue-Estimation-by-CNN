@@ -61,6 +61,14 @@ def pointsToTrackHelper(st, points):
 
     return np.delete(points, delIndexs, axis=0)
 
+def isNewPoint(p0, result):
+    for px,py in p0:
+        print ("---------")
+        print (px,py)
+        print (result["topleft"]["y"], result["bottomright"]["y"])
+        if (px > result["topleft"]["x"] and px < result["bottomright"]["x"] and py > result["topleft"]["y"] and py < result["bottomright"]["y"]):
+            return False
+    return True
 
 def getCenter(result):
     return (result["topleft"]["x"]+result["bottomright"]["x"])/2, (result["topleft"]["y"]+result["bottomright"]["y"])/2
@@ -91,11 +99,6 @@ def main():
         old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
         mask = np.zeros_like(old_frame)
 
-        # we initalise p0, and the rest with values from the first frame
-        results = tfnet.return_predict(old_frame)
-        x, y = getCenter(results[0])
-        p0 = np.vstack((p0, np.array([[np.float32(x), np.float32(y)]])))
-
         while cap.isOpened():
             ret, frame = cap.read()
             img = frame
@@ -125,21 +128,15 @@ def main():
             if ret:  # find any new feature points (center of boxes)
                 results = tfnet.return_predict(frame)
                 for result in results:
-                    x, y = getCenter(result)
-                    # using vstack to append new points to p0
-                    p0 = np.vstack((p0, np.array([[np.float32(x), np.float32(y)]])))
-                    # add center points to feature point if no feature points are inside the box
+                    if (isNewPoint(p0, result)):
+                        print("yes")
+                        x, y = getCenter(result)
+                        # using vstack to append new points to p0
+                        p0 = np.vstack((p0, np.array([[np.float32(x), np.float32(y)]])))
+                    else:
+                        print ("no")
+                    
             cv2.imshow('frame', img)
-            # set up previous values for next iteration
-                        # update good features using optical flow
-
-            # 
-            # if ret:
-            #     results = tfnet.return_predict(frame)
-            #     # tracker defintion
-            #     boxed_image = draw_boxes(frame, results)
-            #     out.write(boxed_image)
-            #     cv2.imshow("results frame", boxed_image)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
