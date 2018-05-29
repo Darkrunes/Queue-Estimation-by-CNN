@@ -49,6 +49,19 @@ def draw_boxes(img_frame, box_info):
     """
     return img_frame
 
+
+# Returns the points that st says to keep, st is obtained from optical flow
+# always remove index 0 because its a placeholder that breaks everything when removed from the actual array
+# and this is for new updated points to draw
+def pointsToTrackHelper(st, points):
+    delIndexs = [0]
+    for i in range(1, len(st)):
+        if st[i] == 0:
+            delIndexs.append(i)
+
+    return np.delete(points, delIndexs, axis=0)
+
+
 def getCenter(result):
     return (result["topleft"]["x"]+result["bottomright"]["x"])/2, (result["topleft"]["y"]+result["bottomright"]["y"])/2
 
@@ -73,43 +86,50 @@ def main():
         out = cv2.VideoWriter('output.avi', fourcc, 20.0, (frame_height, frame_width))
 
         ret, old_frame = cap.read()
-        p0 = np.array([[[0.0, 0.0]]], dtype=np.float32)
-        # np.delete(p0, 0)
+        # initalise as [[[0,0]]] this makes it work with vstack
+        p0 = np.zeros((1, 2), dtype=np.float32)
         old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
         mask = np.zeros_like(old_frame)
 
+        # we initalise p0, and the rest with values from the first frame
+        results = tfnet.return_predict(old_frame)
+        x, y = getCenter(results[0])
+        p0 = np.vstack((p0, np.array([[np.float32(x), np.float32(y)]])))
+
         while cap.isOpened():
             ret, frame = cap.read()
-            print (p0)
             img = frame
-            if (len(p0) > 0 ):# update points that we're tracking
+            if len(p0) > 0:  # update points that we're tracking
                 frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
-                print ("done")
                 # selects good points (not sure why?)
-                points_to_track0 = p0[st == 1]
-                points_to_track1 = p1[st == 1]
+
+                # see comments for function
+                points_to_track0 = pointsToTrackHelper(st, p0)
+                points_to_track1 = pointsToTrackHelper(st, p1)
 
                 # draw the tracks
-                for i,(new,old) in enumerate(zip(points_to_track1,points_to_track0)):
-                    a,b = new.ravel()
-                    c,d = old.ravel()
-                    mask = cv2.line(mask, (a,b),(c,d), color[i].tolist(), 2)
-                    frame = cv2.circle(frame,(a,b),5,color[i].tolist(),-1)
-                    img = cv2.add(frame,mask)
-                
+                for i, (new, old) in enumerate(zip(points_to_track1, points_to_track0)):
+                    a, b = new.ravel()
+                    c, d = old.ravel()
+                    mask = cv2.line(mask, (a, b), (c, d), box_color[0], 2)
+                    frame = cv2.circle(frame, (a, b), 5, box_color[0], -1)
+                    img = cv2.add(frame, mask)
 
-                p0 = points_to_track1.reshape(-1,1,2)
+                # normal appending and reshaping was breaking our code, so we reinitalize p0 with 0,0 (otherwise breaks)
+                # then we add on the new predicted points from optical flow
+                p0 = np.zeros((1, 2), dtype=np.float32)
+                p0 = np.vstack((p0, points_to_track1))
                 old_gray = frame_gray.copy()
 
-
-            if ret: # find any new feature points (center of boxes)
+            if ret:  # find any new feature points (center of boxes)
                 results = tfnet.return_predict(frame)
                 for result in results:
                     x, y = getCenter(result)
-                    p0 = np.append(p0, [[[x,y]]], axis=0)
+                    # using vstack to append new points to p0
+                    p0 = np.vstack((p0, np.array([[np.float32(x), np.float32(y)]])))
                     # add center points to feature point if no feature points are inside the box
-            cv2.imshow('frame',img)
+            cv2.imshow('frame', img)
             # set up previous values for next iteration
                         # update good features using optical flow
 
