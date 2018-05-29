@@ -15,7 +15,9 @@ from darkflow.net.build import TFNet
 # Change to false to use an Nvidia GPU with CudNN
 use_cpu = True
 if use_cpu:
-    options = {"model": "cfg/tiny-yolo-voc-1c.cfg", "load": 3000, "threshold": 0.2, "gpu": 0}
+    # Use this if you want the faster less accurate tiny yolo
+    #options = {"model": "cfg/tiny-yolo-voc-1c.cfg", "load": 3000, "threshold": 0.2, "gpu": 0}
+    options = {"model": "cfg/yolo.cfg", "load": "bin/yolo.weights", "threshold": 0.3, "gpu": 0}
 else:
     options = {"model": "cfg/tiny-yolo-voc.cfg", "load": "bin/tiny-yolo-voc.weights", "threshold": 0.4, "gpu": 1.0}
 
