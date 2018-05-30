@@ -15,9 +15,9 @@ from darkflow.net.build import TFNet
 from Person_Stats import PersonStats
 
 # Change to false to use an Nvidia GPU with CudNN
-use_cpu = True
-full_yolo = False
-draw_bb = True
+use_cpu = False
+full_yolo = True
+draw_bb = False
 if use_cpu:
     if not full_yolo:
         options = {"model": "cfg/tiny-yolo-voc-1c.cfg", "load": 3000, "threshold": 0.2, "gpu": 0}
@@ -51,6 +51,11 @@ def draw_boxes(img_frame, box_info, point):
 
     return img_frame
 
+def draw_str(dst, target, s):
+    global frameRate
+    x, y = target
+    cv2.putText(dst, s, (x+1, y+1), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 0), thickness = 2, lineType=cv2.LINE_AA)
+    cv2.putText(dst, s, (x, y), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.LINE_AA)    
 
 # Returns the points that st says to keep, st is obtained from optical flow
 # always remove index 0 because its a placeholder that breaks everything when removed from the actual array
@@ -244,10 +249,12 @@ def main():
                     if len(person.currentPoints) > 0:
                         img = draw_boxes(img, person.bounding_box_size, person.currentPoints[0])
 
-            cv2.imshow('frame', img)
-            out.write(img)
             current_frame += 1
             getFrameRate()
+            if len(frameRate) > 0:
+                draw_str(img, (20, 20), 'FPS: %d' % frameRate[-1])
+            cv2.imshow('frame', img)
+            out.write(img)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -293,5 +300,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
