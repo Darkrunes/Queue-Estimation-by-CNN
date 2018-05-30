@@ -34,7 +34,7 @@ current_frame = 0
 frame_timer = 0
 people_in_video = []
 people_out_of_video = []
-frameRate = 0
+frameRate = []
 # Parameters for lucas kanade optical flow
 lk_params = dict(winSize=(15, 15),
                  maxLevel=2,
@@ -98,7 +98,7 @@ def getFrameRate():
         frame_timer = time.time()
         return
 
-    frameRate = 1.0 / (time.time() - frame_timer)
+    frameRate.append(1.0 / (time.time() - frame_timer))
     frame_timer = 0
     print("FPS: " + str(frameRate))
     return
@@ -234,25 +234,23 @@ def main():
                     p0 = np.vstack((p0, points_to_track1))
                     old_gray = frame_gray.copy()
 
-
-                if current_frame % 5 == 0:
+                if current_frame % 10 == 0:
                     results = tfnet.return_predict(frame)
                     for result in results:
                         x, y = getCenter(result)
                         # using vstack to append new points to p0
                         if thresholdDistances(p0, x, y) and result["label"] == "person":
-                            #if not full_yolo:
-                                person = check_same_person(x, y)
-                                if person is not None:
-                                    #person.add_new_point([x, y], result["confidence"], len(p0))
-                                    pass
-                                else:
-                                    people_in_video.append(PersonStats(current_frame, get_bounding_box_sizes_rel(x, y,
-                                                                       result), np.array([x, y], dtype=np.float32),
-                                                                       result["confidence"], len(p0), person_id_num))
-                                    person_id_num += 1
+                            person = check_same_person(x, y)
+                            if person is not None:
+                                #person.add_new_point([x, y], result["confidence"], len(p0))
+                                pass
+                            else:
+                                people_in_video.append(PersonStats(current_frame, get_bounding_box_sizes_rel(x, y,
+                                                                   result), np.array([x, y], dtype=np.float32),
+                                                                   result["confidence"], len(p0), person_id_num))
+                                person_id_num += 1
 
-                                    p0 = np.vstack((p0, np.array([[np.float32(x), np.float32(y)]])))
+                                p0 = np.vstack((p0, np.array([[np.float32(x), np.float32(y)]])))
             else:
                 break
 
@@ -266,15 +264,16 @@ def main():
 
         print("Total People in Video: " + str(len(people_in_video) + len(people_out_of_video)))
 
+        frame_rate = sum(frameRate) / float(len(frameRate))
         for person in people_out_of_video:
             print ("PEOPLE OUT OF VID")
             print("Person ID:", person.id)
-            print("Time in Video: " + str((person.last_frame_num - person.initial_detection) * frameRate))
+            print("Time in Video: " + str((person.last_frame_num - person.initial_detection) / frame_rate))
 
         for person in people_in_video:
             print("PEOPLE STILL IN VIDEO AT END")
             print("Person ID:", person.id)
-            print("Time in Video: " + str((current_frame - person.initial_detection) * frameRate))
+            print("Time in Video: " + str((current_frame - person.initial_detection) / frame_rate))
 
         cap.release()
         out.release()
