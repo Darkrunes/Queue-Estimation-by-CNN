@@ -3,7 +3,7 @@
 # OpenCV Code to interact with Video/Image Streams go here
 # Code to draw boxes returned by YOLO should also go here
 
-# Saffat Shams Akanda, <Your Name Here>, <Your Name Here>
+# Saffat Shams Akanda, Carlos Liang, Ilan Kessler
 
 import cv2
 import tensorflow as tf
@@ -16,7 +16,8 @@ from Person_Stats import PersonStats
 
 # Change to false to use an Nvidia GPU with CudNN
 use_cpu = True
-full_yolo = True
+full_yolo = False
+draw_bb = True
 if use_cpu:
     if not full_yolo:
         options = {"model": "cfg/tiny-yolo-voc-1c.cfg", "load": 3000, "threshold": 0.2, "gpu": 0}
@@ -24,11 +25,12 @@ if use_cpu:
         options = {"model": "cfg/yolo.cfg", "load": "bin/yolo.weights", "threshold": 0.3, "gpu": 0}
 else:
     if not full_yolo:
-        options = {"model": "cfg/tiny-yolo-voc.cfg", "load": "bin/tiny-yolo-voc.weights", "threshold": 0.4, "gpu": 1.0}
+        options = {"model": "cfg/tiny-yolo-voc.cfg", "load": 3000, "threshold": 0.2, "gpu": 1.0}
     else:
         options = {"model": "cfg/yolo.cfg", "load": "bin/yolo.weights", "threshold": 0.3, "gpu": 1.0}
 
 box_color = [255 * np.random.rand(3)]
+box_color.append([255 * np.random.rand(3)])
 person_id_num = 1
 current_frame = 0
 frame_timer = 0
@@ -41,26 +43,12 @@ lk_params = dict(winSize=(15, 15),
                  criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
 
-def draw_boxes(img_frame, box_info):
-    # box_info in tfnet json format
+def draw_boxes(img_frame, box_info, point):
+    print("POINT", point[0], point[1])
+    print(box_info)
+    img_frame = cv2.rectangle(img_frame, (int(point[0] - box_info[0]), int(point[1] - box_info[2])),
+                              (int(point[1] + box_info[1]), int(point[1] + box_info[3])), box_color[1][0], 4)
 
-    for box in box_info:
-        if box["label"] == "person":
-            img_frame = cv2.rectangle(img_frame, (box["topleft"]["x"], box["topleft"]["y"]),
-                                      (box["bottomright"]["x"], box["bottomright"]["y"]), box_color[0], 4)
-
-    """
-    rects = []
-    for box in box_info:
-        if box["label"] == "person":
-            rects.append([box["topleft"]["x"], box["topleft"]["y"], box["bottomright"]["x"],
-                          box["bottomright"]["y"], 1])
-    print(rects)
-    rets = sort_alg.update(rects)
-    for ret in rets:
-        img_frame = cv2.rectangle(img_frame, (ret[0], ret[1]), (ret[2], ret[3]), box_color, 4)
-        img_frame = cv2.putText(img_frame, ret[5], (ret[0], ret[1]), cv2.FONT_HERSHEY_COMPLEX, 2, box_color, 2)
-    """
     return img_frame
 
 
@@ -98,16 +86,17 @@ def getFrameRate():
         frame_timer = time.time()
         return
 
+    if len(frameRate) > 50:
+        frameRate = [sum(frameRate) / float(len(frameRate))]
     frameRate.append(1.0 / (time.time() - frame_timer))
     frame_timer = 0
-    print("FPS: " + str(frameRate))
+    #print("FPS: " + str(frameRate))
     return
 
 
 # Check if the point is part of the bounding box of a already existing person
 def check_same_person(x, y):
     global people_in_video
-    #print(people_in_video)
     for person in people_in_video:
         if not person.currentPoints:
             continue
@@ -185,25 +174,21 @@ def main():
                     k = 0
                     person_removal_indicies = []
                     for person in people_in_video:
-                        print("Checking Person", k)
                         # the person stores the indicies in p0 that belong to them, check which ones are still valid
                         indicies_to_keep = []
                         for index in person.p0_indicies:
                             if st[index] == 1:
                                 indicies_to_keep.append(index)
 
-                        print("Keeping indicies", indicies_to_keep)
                         # if they have lost any they are probably out of the frame and should not be tracked
                         if len(person.p0_indicies) < len(indicies_to_keep):
                             # person has left frame
-                            print("Removing Person")
                             people_out_of_video.append(person)
                             person_removal_indicies.append(k)
                             person.last_frame_num = current_frame
                             k += 1
                             continue
 
-                        print("Updating Points")
                         # If they are still in the frame, update the p0 indicies they contain
                         person.update_points(list(p1[indicies_to_keep]))
                         indicies_to_keep = []
@@ -224,8 +209,8 @@ def main():
                     for i, (new, old) in enumerate(zip(points_to_track1, points_to_track0)):
                         a, b = new.ravel()
                         c, d = old.ravel()
-                        mask = cv2.line(mask, (a, b), (c, d), box_color[0], 2)
-                        frame = cv2.circle(frame, (a, b), 5, box_color[0], -1)
+                        mask = cv2.line(mask, (a, b), (c, d), box_color[0][0], 2)
+                        frame = cv2.circle(frame, (a, b), 5, box_color[0][0], -1)
                         img = cv2.add(frame, mask)
 
                     # normal appending and reshaping was breaking our code, so we reinitalize p0 with 0,0 (otherwise breaks)
@@ -254,6 +239,11 @@ def main():
             else:
                 break
 
+            if draw_bb:
+                for person in people_in_video:
+                    if len(person.currentPoints) > 0:
+                        img = draw_boxes(img, person.bounding_box_size, person.currentPoints[0])
+
             cv2.imshow('frame', img)
             out.write(img)
             current_frame += 1
@@ -265,15 +255,23 @@ def main():
         print("Total People in Video: " + str(len(people_in_video) + len(people_out_of_video)))
 
         frame_rate = sum(frameRate) / float(len(frameRate))
+        wait_times = []
+        print("PEOPLE OUT OF VID")
         for person in people_out_of_video:
-            print ("PEOPLE OUT OF VID")
             print("Person ID:", person.id)
-            print("Time in Video: " + str((person.last_frame_num - person.initial_detection) / frame_rate))
+            wait_time = (person.last_frame_num - person.initial_detection) / frame_rate
+            wait_times.append(wait_time)
+            print("Time in Video: " + str(wait_time))
 
+        print("PEOPLE STILL IN VIDEO AT END")
         for person in people_in_video:
-            print("PEOPLE STILL IN VIDEO AT END")
             print("Person ID:", person.id)
-            print("Time in Video: " + str((current_frame - person.initial_detection) / frame_rate))
+            wait_time = (current_frame - person.initial_detection) / frame_rate
+            wait_times.append(wait_time)
+            print("Time in Video: " + str(wait_time))
+
+        print("Average Wait Time: ", (sum(wait_times) / float(len(wait_times))))
+        print("Frame Rate:", frame_rate)
 
         cap.release()
         out.release()
